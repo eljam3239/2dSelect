@@ -91,12 +91,15 @@ class TelescopeSelect extends StatefulWidget {
 class _TelescopeSelectState extends State<TelescopeSelect> {
   int _selectedIndex = 0;
   bool _isDragging = false;
+  Offset? _dragStartPosition;
+  late List<double> _sortedWidths;
 
   @override
   void initState() {
     super.initState();
     // Start with the smallest size selected
     _selectedIndex = 0;
+    _sortedWidths = List<double>.from(widget.widths)..sort();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       widget.onWidthChanged?.call(widget.widths[_selectedIndex]);
     });
@@ -105,30 +108,35 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
   void _handleDragStart(DragStartDetails details) {
     setState(() {
       _isDragging = true;
+      _dragStartPosition = details.localPosition;
     });
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    if (!_isDragging) return;
+    if (!_isDragging || _dragStartPosition == null) return;
 
-    // Calculate the drag direction and distance
-    // Positive delta means dragging right/down (toward larger sizes)
-    // Negative delta means dragging left/up (toward smaller sizes)
-    final dragDistance = details.delta.dx + details.delta.dy;
-
-    // Threshold for snapping to next/previous size (in pixels)
-    const threshold = 10.0;
-
-    if (dragDistance > threshold && _selectedIndex < widget.widths.length - 1) {
-      // Drag right/down -> select larger size
+    final currentPosition = details.localPosition;
+    
+    // Calculate which rectangle the current position falls into
+    // by checking the max of x and y coordinates (since squares)
+    final positionInMm = currentPosition.dx.abs() / widget.pixelsPerMm;
+    
+    // Find the appropriate size based on current drag position
+    int newIndex = _selectedIndex;
+    
+    // Check if we should snap to a larger size
+    for (int i = _sortedWidths.length - 1; i >= 0; i--) {
+      if (positionInMm >= _sortedWidths[i] * 0.85) { // 85% threshold for snapping
+        // Find this width in the original unsorted array
+        newIndex = widget.widths.indexOf(_sortedWidths[i]);
+        break;
+      }
+    }
+    
+    // Only update if the selection changed
+    if (newIndex != _selectedIndex) {
       setState(() {
-        _selectedIndex++;
-        widget.onWidthChanged?.call(widget.widths[_selectedIndex]);
-      });
-    } else if (dragDistance < -threshold && _selectedIndex > 0) {
-      // Drag left/up -> select smaller size
-      setState(() {
-        _selectedIndex--;
+        _selectedIndex = newIndex;
         widget.onWidthChanged?.call(widget.widths[_selectedIndex]);
       });
     }
@@ -137,6 +145,7 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
   void _handleDragEnd(DragEndDetails details) {
     setState(() {
       _isDragging = false;
+      _dragStartPosition = null;
     });
   }
 
@@ -173,14 +182,19 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
 
   Widget _buildRectangle(double width, int index) {
     final size = width * widget.pixelsPerMm;
-    final isSelected = widget.widths[_selectedIndex] == width;
+    final selectedWidth = widget.widths[_selectedIndex];
+    final isSelected = selectedWidth == width;
+    
+    // A rectangle should be bold green if it's the selected size or smaller
+    // (i.e., nested within the selected one)
+    final shouldBeGreen = width <= selectedWidth;
     
     // Determine color based on state
     Color rectangleColor;
-    if (isSelected && _isDragging) {
+    if (shouldBeGreen && _isDragging) {
       rectangleColor = Colors.green[200]!; // Pale green during drag
-    } else if (isSelected) {
-      rectangleColor = Colors.green[600]!; // Bold green when selected
+    } else if (shouldBeGreen) {
+      rectangleColor = Colors.green[600]!; // Bold green when selected or nested
     } else {
       rectangleColor = Colors.grey[400]!; // Grey when not selected
     }
@@ -195,20 +209,22 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
           color: rectangleColor,
           border: Border.all(color: Colors.black, width: 2),
         ),
-        child: Align(
-          alignment: Alignment.bottomRight,
-          child: Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: Text(
-              '${width.toStringAsFixed(0)}mm',
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
+        child: isSelected
+            ? Align(
+                alignment: Alignment.bottomRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: Text(
+                    '${width.toStringAsFixed(1)}mm',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              )
+            : const SizedBox.shrink(),
       ),
     );
   }
