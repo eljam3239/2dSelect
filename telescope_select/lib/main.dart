@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(const MyApp());
@@ -31,6 +32,32 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   double? _selectedWidth;
+  final GlobalKey<_TelescopeSelectState> _telescopeKey = GlobalKey<_TelescopeSelectState>();
+
+  void _showWidthPicker() {
+    final availableWidths = const [38.0, 58.0, 80.0];
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Width'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: availableWidths.map((width) {
+              return ListTile(
+                title: Text('${width.toStringAsFixed(0)} mm'),
+                onTap: () {
+                  _telescopeKey.currentState?.setSelectedWidth(width);
+                  Navigator.of(context).pop();
+                },
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +76,8 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             const SizedBox(height: 40),
             TelescopeSelect(
-              widths: const [32, 34.5, 50.8, 48, 51, 72],
+              key: _telescopeKey,
+              widths: const [38, 58, 80], //[32, 34.5, 50.8, 48, 51, 72],
               onWidthChanged: (width) {
                 setState(() {
                   _selectedWidth = width;
@@ -57,11 +85,19 @@ class _MyHomePageState extends State<MyHomePage> {
               },
             ),
             const SizedBox(height: 40),
-            Text(
-              _selectedWidth != null
-                  ? 'Selected: ${_selectedWidth!.toStringAsFixed(1)} mm'
-                  : 'No selection',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            GestureDetector(
+              onTap: _showWidthPicker,
+              child: Text(
+                _selectedWidth != null
+                    ? 'Selected: ${_selectedWidth!.toStringAsFixed(1)} mm'
+                    : 'No selection',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  decoration: TextDecoration.underline,
+                  color: Colors.blue,
+                ),
+              ),
             ),
           ],
         ),
@@ -105,6 +141,18 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
     });
   }
 
+  /// Programmatically set the selected width
+  void setSelectedWidth(double width) {
+    final index = widget.widths.indexOf(width);
+    if (index != -1 && index != _selectedIndex) {
+      setState(() {
+        _selectedIndex = index;
+      });
+      widget.onWidthChanged?.call(widget.widths[_selectedIndex]);
+      HapticFeedback.selectionClick();
+    }
+  }
+
   void _handleDragStart(DragStartDetails details) {
     setState(() {
       _isDragging = true;
@@ -135,6 +183,9 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
     
     // Only update if the selection changed
     if (newIndex != _selectedIndex) {
+      // Trigger haptic feedback on selection change
+      HapticFeedback.selectionClick();
+      
       setState(() {
         _selectedIndex = newIndex;
         widget.onWidthChanged?.call(widget.widths[_selectedIndex]);
@@ -188,15 +239,24 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
     // A rectangle should be bold green if it's the selected size or smaller
     // (i.e., nested within the selected one)
     final shouldBeGreen = width <= selectedWidth;
+    final isBigger = width > selectedWidth;
     
     // Determine color based on state
     Color rectangleColor;
+    Color borderColor;
+    
     if (shouldBeGreen && _isDragging) {
       rectangleColor = Colors.green[200]!; // Pale green during drag
+      borderColor = Colors.green;
     } else if (shouldBeGreen) {
       rectangleColor = Colors.green[600]!; // Bold green when selected or nested
+      borderColor = Colors.green;
+    } else if (isBigger) {
+      rectangleColor = Colors.green[50]!; // Very faint light green fill for bigger rectangles
+      borderColor = Colors.green[100]!; // Very faint green outline for bigger rectangles
     } else {
-      rectangleColor = Colors.grey[400]!; // Grey when not selected
+      rectangleColor = Colors.grey[400]!; // Grey fallback
+      borderColor = Colors.green;
     }
 
     return Positioned(
@@ -207,7 +267,7 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
         height: size,
         decoration: BoxDecoration(
           color: rectangleColor,
-          border: Border.all(color: Colors.black, width: 2),
+          border: Border.all(color: borderColor, width: 2),
         ),
         child: isSelected
             ? Align(
