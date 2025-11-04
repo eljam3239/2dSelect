@@ -253,11 +253,11 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
     if (shouldBeGreen && _isDragging) {
       baseColor = Colors.green[200]!; // Pale green during drag
       borderColor = Colors.green;
-      useGradient = isSelected;
+      useGradient = true; // Apply gradient to all selected and nested
     } else if (shouldBeGreen) {
       baseColor = Colors.green[600]!; // Bold green when selected or nested
       borderColor = Colors.green;
-      useGradient = isSelected;
+      useGradient = true; // Apply gradient to all selected and nested
     } else if (isBigger) {
       baseColor = Colors.green[50]!; // Very faint light green fill for bigger rectangles
       borderColor = Colors.green[100]!; // Very faint green outline for bigger rectangles
@@ -284,7 +284,12 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
                 )
               : null,
           color: useGradient ? null : baseColor,
-          border: Border.all(color: borderColor, width: 2),
+          border: Border(
+            left: BorderSide(color: borderColor, width: 2),
+            right: BorderSide(color: borderColor, width: 2),
+            bottom: BorderSide(color: borderColor, width: 2),
+            top: BorderSide.none, // No top border
+          ),
         ),
         child: isSelected
             ? Align(
