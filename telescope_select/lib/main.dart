@@ -112,12 +112,14 @@ class TelescopeSelect extends StatefulWidget {
   final List<double> widths;
   final ValueChanged<double>? onWidthChanged;
   final double pixelsPerMm;
+  final double heightScale; // Vertical scale factor (1.0 = square, 0.5 = half height)
 
   const TelescopeSelect({
     super.key,
     required this.widths,
     this.onWidthChanged,
     this.pixelsPerMm = 5.0, // Default scale: 5 pixels per mm
+    this.heightScale = 0.5, // Default: square (same width and height)
   });
 
   @override
@@ -205,7 +207,8 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
     // Sort widths to ensure proper nesting (largest to smallest for rendering)
     final sortedWidths = List<double>.from(widget.widths)..sort();
     final largestWidth = sortedWidths.last;
-    final containerSize = largestWidth * widget.pixelsPerMm;
+    final containerWidth = largestWidth * widget.pixelsPerMm;
+    final containerHeight = containerWidth * widget.heightScale;
 
     return GestureDetector(
       onPanStart: _handleDragStart,
@@ -215,8 +218,8 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: containerSize,
-            height: containerSize,
+            width: containerWidth,
+            height: containerHeight,
             color: Colors.grey[200],
             child: Stack(
               children: [
@@ -232,7 +235,8 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
   }
 
   Widget _buildRectangle(double width, int index) {
-    final size = width * widget.pixelsPerMm;
+    final rectWidth = width * widget.pixelsPerMm;
+    final rectHeight = rectWidth * widget.heightScale;
     final selectedWidth = widget.widths[_selectedIndex];
     final isSelected = selectedWidth == width;
     
@@ -242,20 +246,23 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
     final isBigger = width > selectedWidth;
     
     // Determine color based on state
-    Color rectangleColor;
+    Color baseColor;
     Color borderColor;
+    bool useGradient = false;
     
     if (shouldBeGreen && _isDragging) {
-      rectangleColor = Colors.green[200]!; // Pale green during drag
+      baseColor = Colors.green[200]!; // Pale green during drag
       borderColor = Colors.green;
+      useGradient = isSelected;
     } else if (shouldBeGreen) {
-      rectangleColor = Colors.green[600]!; // Bold green when selected or nested
+      baseColor = Colors.green[600]!; // Bold green when selected or nested
       borderColor = Colors.green;
+      useGradient = isSelected;
     } else if (isBigger) {
-      rectangleColor = Colors.green[50]!; // Very faint light green fill for bigger rectangles
+      baseColor = Colors.green[50]!; // Very faint light green fill for bigger rectangles
       borderColor = Colors.green[100]!; // Very faint green outline for bigger rectangles
     } else {
-      rectangleColor = Colors.grey[400]!; // Grey fallback
+      baseColor = Colors.grey[400]!; // Grey fallback
       borderColor = Colors.green;
     }
 
@@ -263,10 +270,20 @@ class _TelescopeSelectState extends State<TelescopeSelect> {
       top: 0,
       left: 0,
       child: Container(
-        width: size,
-        height: size,
+        width: rectWidth,
+        height: rectHeight,
         decoration: BoxDecoration(
-          color: rectangleColor,
+          gradient: useGradient
+              ? LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [
+                    baseColor, // Darkest at bottom
+                    baseColor.withOpacity(0.3), // Lighter at top
+                  ],
+                )
+              : null,
+          color: useGradient ? null : baseColor,
           border: Border.all(color: borderColor, width: 2),
         ),
         child: isSelected
